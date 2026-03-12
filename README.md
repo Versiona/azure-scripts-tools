@@ -176,6 +176,40 @@ Full JSON array, one object per VM. Pipe through `jq` for filtering.
 
 ---
 
+## Safety
+
+The script is **read-only** — it only queries Azure, never creates, modifies, or deletes any resources.
+
+**Azure calls made (all read operations)**
+
+| Command | Purpose |
+|---------|---------|
+| `az sql vm list` | List SQL IaaS-registered VMs |
+| `az vm show` | Read VM compute details |
+| `az resource list` | Discover Change Tracking workspaces |
+| `az monitor log-analytics workspace show` | Read workspace config |
+| `az monitor log-analytics query` | Query inventory logs |
+
+**Minimum required Azure RBAC role:** `Reader` on each subscription. No write permissions needed.
+
+### Verifying before running in production
+
+```bash
+# 1. Syntax check — executes nothing
+bash -n get_sql_vms.sh
+
+# 2. Run the offline test suite (no Azure login required)
+bash tests/run_tests.sh
+
+# 3. Confirm which Azure identity is active
+az account show
+
+# 4. Test on a single non-critical subscription first
+./get_sql_vms.sh -s "<dev-sub-id>" --skip-inventory
+```
+
+---
+
 ## Version history
 
 See [CHANGELOG.md](CHANGELOG.md).
