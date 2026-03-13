@@ -123,4 +123,34 @@ EXIT=$?
 set -e
 assert_eq "missing file → non-zero exit" "1" "$EXIT"
 
+# ─── Source field — inventory data model ─────────────────────────────────────
+suite "Source field in inventory data model"
+
+for src in WindowsService SoftwareInventory; do
+    ENTRY=$(jq -n --arg s "$src" '{ Source: $s }')
+    GOT=$(jq -r '.Source' <<<"$ENTRY")
+    assert_eq "Source value preserved: $src" "$src" "$GOT"
+done
+
+# ─── Inventory CSV header includes Source column ──────────────────────────────
+suite "print_inv_csv — Source column in header"
+
+INV_HEADER=$(print_inv_csv "[]" | head -1)
+assert_contains "inv csv header has Source"          "Source"           "$INV_HEADER"
+assert_contains "inv csv header has Computer"        "Computer"         "$INV_HEADER"
+assert_contains "inv csv header has Instance Name"   "Instance Name"    "$INV_HEADER"
+assert_contains "inv csv header has Startup Type"    "Startup Type"     "$INV_HEADER"
+
+# ─── KQL uses column_ifexists for optional columns ───────────────────────────
+suite "KQL query — column_ifexists guard"
+
+KQL_USES_CIFEX=$(grep -c 'column_ifexists' "$SCRIPT" || true)
+assert_eq "column_ifexists appears in script" "1" "$( [[ "$KQL_USES_CIFEX" -ge 1 ]] && echo 1 || echo 0 )"
+
+# ─── KQL unions WindowsServices and Software Inventory ───────────────────────
+suite "KQL query — unions both sources"
+
+assert_contains "kql has WindowsServices" "WindowsServices" "$(grep -o 'WindowsServices' "$SCRIPT" | head -1)"
+assert_contains "kql has SoftwareInventory source label" "SoftwareInventory" "$(grep -o 'SoftwareInventory' "$SCRIPT" | head -1)"
+
 summary

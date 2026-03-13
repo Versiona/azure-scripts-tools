@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.3.0"
+readonly VERSION="1.4.0"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then

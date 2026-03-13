@@ -18,9 +18,11 @@ running MSSQL instances.
 2. Per VM, calls `az vm show` to enrich with `vmSize` and OS image SKU; SQL
    version is parsed from the `sqlImageOffer` field
    (e.g. `"SQL2019-WS2019"` → `"2019"`).
-3. Optionally queries **Change Tracking** for running Windows services whose
-   name starts with `MSSQL` (covers the default instance `MSSQLSERVER` and
-   named instances `MSSQL$<name>`).
+3. Optionally queries **Change Tracking & Inventory** for running MSSQL
+   instances. Both **Windows Services** (`MSSQLSERVER` / `MSSQL$<name>`) and
+   **Software Inventory** (`Microsoft SQL Server …`) are queried so that either
+   Change Tracking configuration returns results. A `Source` column indicates
+   which data source each row came from.
    Workspaces are auto-discovered unless you pass `-w`.
 
 ---
@@ -171,8 +173,9 @@ Full JSON array, one object per VM. Pipe through `jq` for filtering.
   the Log Analytics workspace overview page — not the full resource ID.
 - Change Tracking & Inventory must be **enabled on the VMs** and data must have
   been collected for inventory queries to return results.
-- All `az` calls suppress their own error output and return `[]` on failure so
-  that a single inaccessible subscription does not abort the whole scan.
+- Failures on individual `az` calls (inaccessible subscription, missing
+  workspace, etc.) are surfaced as warnings and the scan continues; a single
+  error does not abort the whole run.
 
 ---
 
@@ -214,4 +217,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.3.0**
+Current version: **1.4.0**

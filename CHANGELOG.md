@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] – 2026-03-12
+
+### Added
+- **Progress bar** during VM enrichment: shows filled/empty blocks, percentage,
+  count, and current VM name; redraws in place on stderr and is suppressed when
+  stderr is not a TTY.
+- **Verbose KQL output**: `--verbose` now prints the full KQL query to stderr
+  before each Log Analytics call to ease debugging.
+- **Version + PID at startup**: `get_sql_vms.sh v1.4.0 (PID <n>)` logged on
+  every run.
+- **Software Inventory source** in Change Tracking queries: the KQL now unions
+  both `WindowsServices` (MSSQLSERVER / MSSQL$\<name\>) and `Software` entries
+  (Microsoft SQL Server) so that either Change Tracking configuration returns
+  results.
+- **`Source` column** in inventory output (`WindowsService` or
+  `SoftwareInventory`) — present in table, CSV, and JSON formats.
+
+### Fixed
+- **Only 1 VM returned despite many found**: `az` commands inside the VM loop
+  consumed the loop's stdin when the loop used process substitution. Fixed by
+  routing the VM stream through file descriptor 3
+  (`done 3< <(...)` / `read <&3`).
+- **Garbled escape codes** (`\033[1m`, etc.) in output: terminal colors now use
+  `tput` instead of hardcoded ANSI sequences, guarded by a TTY check.
+- **CRLF (`\r`) characters** in subscription names and other `az -o tsv` output
+  (common on WSL): all TSV captures now pipe through `tr -d '\r'`.
+- **`unknown` for SQL SKU, SQL Version, and License fields**: newer Azure CLI
+  returns these at the top level rather than under `.properties`; fixed with
+  dual-path expressions such as
+  `(.properties.sqlImageSku // .sqlImageSku) // "unknown"`.
+- **No SQL VMs found with `-s`/`-g`**: `az sql vm list` and workspace discovery
+  now pass `--subscription` directly to every `az` call instead of relying on
+  `az account set` context which could silently fail.
+- **KQL `SEN0100` error** ("operator failed to resolve scalar expression named
+  `ServiceName`"): optional columns are now wrapped in `column_ifexists()` so
+  the query runs against any workspace schema.
+
+### Changed
+- Error output from `az` calls is now surfaced as warnings instead of being
+  silently swallowed, making failures easier to diagnose.
+- Version bumped to `1.4.0`.
+
+---
+
 ## [1.3.0] – 2026-03-12
 
 ### Added
@@ -80,6 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
-[1.2.0]: https://github.com/your-org/az_scripts/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/your-org/az_scripts/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/your-org/az_scripts/releases/tag/v1.0.0
+[1.4.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/Versiona/azure-scripts-tools/releases/tag/v1.0.0

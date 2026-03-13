@@ -16,6 +16,7 @@ HELP=$("$SCRIPT" --help 2>&1 || true)
 assert_contains "-h shows version"          "v1."              "$HELP"
 assert_contains "-h shows -s flag"          "-s, --subscription" "$HELP"
 assert_contains "-h shows -f flag"          "-f, --subscriptions-file" "$HELP"
+assert_contains "-h shows -g flag"          "-g, --resource-group" "$HELP"
 assert_contains "-h shows -i flag"          "-i, --interactive" "$HELP"
 assert_contains "-h shows -o flag"          "-o, --output"     "$HELP"
 assert_contains "-h shows --skip-inventory" "--skip-inventory"  "$HELP"
