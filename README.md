@@ -19,11 +19,17 @@ running MSSQL instances.
    version is parsed from the `sqlImageOffer` field
    (e.g. `"SQL2019-WS2019"` → `"2019"`).
 3. Optionally queries **Change Tracking & Inventory** for running MSSQL
-   instances. Both **Windows Services** (`MSSQLSERVER` / `MSSQL$<name>`) and
-   **Software Inventory** (`Microsoft SQL Server …`) are queried so that either
-   Change Tracking configuration returns results. A `Source` column indicates
-   which data source each row came from.
-   Workspaces are auto-discovered unless you pass `-w`.
+   instances using two complementary sources:
+   - **Windows Services** — matches service names starting with `MSSQL`
+     (e.g. `MSSQLSERVER`, `MSSQL$NAMED`) **or** display names containing
+     `"SQL Server"` (e.g. `"SQL Server (MSSQLSERVER)"`). Both naming
+     conventions are covered so no instance is missed regardless of how the
+     Change Tracking agent reports the service.
+   - **Software Inventory** — matches entries whose `SoftwareName` contains
+     `"SQL Server"` (`Microsoft SQL Server …`).
+   A `Source` column (`WindowsService` / `SoftwareInventory`) indicates which
+   data source each row came from. Workspaces are auto-discovered unless you
+   pass `-w`.
 
 ---
 
@@ -212,6 +218,9 @@ Full JSON array, one object per section. Pipe through `jq` for filtering.
   hostname, which is usually the same as the Azure VM resource name. If a VM
   uses a different hostname (e.g. domain-joined), use `-v` to inspect the
   computer filter being applied.
+- The Windows Services query matches **both** `MSSQL*` service names and
+  display names containing `"SQL Server"`, so instances are found regardless of
+  which field the Change Tracking agent populates on a given OS version.
 - Failures on individual `az` calls (inaccessible subscription, missing
   workspace, etc.) are surfaced as warnings and the scan continues; a single
   error does not abort the whole run.
