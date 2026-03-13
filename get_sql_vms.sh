@@ -331,16 +331,32 @@ query_mssql_services() {
     # Software Inventory: "Microsoft SQL Server <year>" or "SQL Server"
     local kql='let svc = ConfigurationData
 | where ConfigDataType == "WindowsServices"
-| where SoftwareName startswith "MSSQL" or ServiceName startswith "MSSQL"
-| extend InstanceName = coalesce(SoftwareName, ServiceName)
+| where SoftwareName startswith "MSSQL"
+    or column_ifexists("ServiceName", "") startswith "MSSQL"
+| extend InstanceName = coalesce(
+    SoftwareName,
+    column_ifexists("ServiceName", ""),
+    "unknown")
 | summarize arg_max(TimeGenerated, *) by Computer, InstanceName
 | project Computer,
           InstanceName,
           Source        = "WindowsService",
-          DisplayName   = coalesce(CurrentServiceName, ServiceDisplayName, InstanceName),
-          State         = coalesce(SvcState, ServiceState, "unknown"),
-          StartupType   = coalesce(SvcStartupType, ServiceStartupType, "unknown"),
-          ServiceAccount= coalesce(SvcAccount, ServiceAccount, "unknown"),
+          DisplayName   = coalesce(
+              column_ifexists("CurrentServiceName", ""),
+              column_ifexists("ServiceDisplayName", ""),
+              InstanceName),
+          State         = coalesce(
+              column_ifexists("SvcState", ""),
+              column_ifexists("ServiceState", ""),
+              "unknown"),
+          StartupType   = coalesce(
+              column_ifexists("SvcStartupType", ""),
+              column_ifexists("ServiceStartupType", ""),
+              "unknown"),
+          ServiceAccount= coalesce(
+              column_ifexists("SvcAccount", ""),
+              column_ifexists("ServiceAccount", ""),
+              "unknown"),
           LastSeen      = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC");
 let inv = ConfigurationData
 | where ConfigDataType == "Software"
