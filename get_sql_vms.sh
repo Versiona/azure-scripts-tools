@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.4.4"
+readonly VERSION="1.5.0"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -29,6 +29,8 @@ SUBSCRIPTIONS_FILE=""
 RESOURCE_GROUP=""
 WORKSPACE_ID=""
 OUTPUT_FORMAT="table"
+VMS_OUTPUT_FILE=""         # --vms-file: write SQL VM results here; empty = stdout
+INV_OUTPUT_FILE=""         # --inv-file: write inventory results here; empty = stdout
 SKIP_INVENTORY=false
 VERBOSE=false
 INTERACTIVE=false
@@ -81,6 +83,10 @@ ${BOLD}OPTIONS${NC}
                                  interactively (fzf UI if installed, numbered
                                  list otherwise).
   -o, --output  <format>         table | json | csv   (default: table)
+      --vms-file  <path>         Write SQL VM results to this file instead of
+                                 stdout. Creates or overwrites the file.
+      --inv-file  <path>         Write Change Tracking inventory results to this
+                                 file instead of stdout.
       --skip-inventory           Skip Change Tracking inventory queries
   -v, --verbose                  Debug output
   -h, --help                     Show this help
@@ -93,6 +99,7 @@ ${BOLD}EXAMPLES${NC}
   ${SCRIPT_NAME} -f subscriptions.txt -w "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   ${SCRIPT_NAME} -i
   ${SCRIPT_NAME} -i -o csv --skip-inventory
+  ${SCRIPT_NAME} -f subs.txt -o csv --vms-file vms.csv --inv-file inventory.csv
 
 ${BOLD}SUBSCRIPTIONS FILE FORMAT${NC}
   # This is a comment
@@ -581,6 +588,8 @@ main() {
             -g|--resource-group)     RESOURCE_GROUP="$2";     shift 2 ;;
             -w|--workspace)          WORKSPACE_ID="$2";       shift 2 ;;
             -o|--output)             OUTPUT_FORMAT="$2";      shift 2 ;;
+            --vms-file)              VMS_OUTPUT_FILE="$2";    shift 2 ;;
+            --inv-file)              INV_OUTPUT_FILE="$2";    shift 2 ;;
             -i|--interactive)        INTERACTIVE=true;        shift   ;;
             --skip-inventory)        SKIP_INVENTORY=true;     shift   ;;
             -v|--verbose)            VERBOSE=true;            shift   ;;
@@ -659,32 +668,38 @@ main() {
     done
 
     # ── Print VM results ──────────────────────────────────────────────────────
-    printf "\n${BOLD}═══ SQL Virtual Machines ═══════════════════════════════════════${NC}\n\n"
+    printf "\n${BOLD}═══ SQL Virtual Machines ═══════════════════════════════════════${NC}\n\n" >&2
     if [[ $(jq 'length' <<<"$all_vms") -eq 0 ]]; then
         warn "No SQL VMs found across all subscriptions."
     else
+        local vms_dest="${VMS_OUTPUT_FILE:-/dev/stdout}"
+        [[ -n "$VMS_OUTPUT_FILE" ]] && log "Writing SQL VM results → ${VMS_OUTPUT_FILE}"
         case "$OUTPUT_FORMAT" in
-            json) jq . <<<"$all_vms"        ;;
-            csv)  print_vm_csv "$all_vms"   ;;
-            *)    print_vm_table "$all_vms" ;;
+            json) jq . <<<"$all_vms"        > "$vms_dest" ;;
+            csv)  print_vm_csv "$all_vms"   > "$vms_dest" ;;
+            *)    print_vm_table "$all_vms" > "$vms_dest" ;;
         esac
+        [[ -n "$VMS_OUTPUT_FILE" ]] && ok "SQL VM results written to: ${VMS_OUTPUT_FILE}"
     fi
 
     $SKIP_INVENTORY && return 0
 
     # ── Print inventory results ───────────────────────────────────────────────
-    printf "\n${BOLD}═══ Change Tracking – Running MSSQL Instances ══════════════════${NC}\n\n"
+    printf "\n${BOLD}═══ Change Tracking – Running MSSQL Instances ══════════════════${NC}\n\n" >&2
     if [[ $(jq 'length' <<<"$all_instances") -eq 0 ]]; then
         warn "No MSSQL instances found in Change Tracking inventory."
         warn "Ensure VMs are onboarded to Change Tracking and collection has run."
         return 0
     fi
 
+    local inv_dest="${INV_OUTPUT_FILE:-/dev/stdout}"
+    [[ -n "$INV_OUTPUT_FILE" ]] && log "Writing inventory results → ${INV_OUTPUT_FILE}"
     case "$OUTPUT_FORMAT" in
-        json) jq . <<<"$all_instances"        ;;
-        csv)  print_inv_csv "$all_instances"  ;;
-        *)    print_inv_table "$all_instances" ;;
+        json) jq . <<<"$all_instances"        > "$inv_dest" ;;
+        csv)  print_inv_csv "$all_instances"  > "$inv_dest" ;;
+        *)    print_inv_table "$all_instances" > "$inv_dest" ;;
     esac
+    [[ -n "$INV_OUTPUT_FILE" ]] && ok "Inventory results written to: ${INV_OUTPUT_FILE}"
 }
 
 main "$@"

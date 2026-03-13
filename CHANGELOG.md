@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] – 2026-03-12
+
+### Added
+- `--vms-file <path>`: write SQL VM results to a file instead of stdout.
+  Creates or overwrites the file; logs the path and confirms on completion.
+- `--inv-file <path>`: write Change Tracking inventory results to a file
+  instead of stdout.
+- Both flags can be used independently or together, and work with all
+  `-o` formats (`table`, `csv`, `json`).
+
+### Changed
+- Section banners (`═══ SQL Virtual Machines ═══` etc.) now go to **stderr**
+  instead of stdout, so they never appear in redirected output or files.
+- Version bumped to `1.5.0`.
+
+---
+
 ## [1.4.4] – 2026-03-12
 
 ### Fixed
@@ -184,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.5.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.1...v1.4.2

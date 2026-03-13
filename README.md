@@ -78,6 +78,8 @@ get_sql_vms.sh [OPTIONS]
 | `-g, --resource-group <name>` | Filter SQL VMs to a specific resource group. |
 | `-w, --workspace <id>` | Log Analytics workspace customer ID (GUID). If omitted, workspaces are auto-discovered per subscription. |
 | `-o, --output <format>` | `table` (default) \| `json` \| `csv` |
+| `--vms-file <path>` | Write SQL VM results to this file instead of stdout. |
+| `--inv-file <path>` | Write Change Tracking inventory results to this file instead of stdout. |
 | `--skip-inventory` | Skip Change Tracking inventory queries (faster). |
 | `-v, --verbose` | Print debug output to stderr. |
 | `-h, --help` | Show help text. |
@@ -116,6 +118,14 @@ get_sql_vms.sh [OPTIONS]
 
 # Filter to a specific resource group
 ./get_sql_vms.sh -s "aaaa-..." -g "my-resource-group"
+
+# Write each section to a separate CSV file
+./get_sql_vms.sh -f subscriptions.txt -o csv \
+  --vms-file sql_vms.csv \
+  --inv-file sql_inventory.csv
+
+# Write VMs to file, stream inventory to stdout
+./get_sql_vms.sh -f subscriptions.txt -o json --vms-file vms.json
 ```
 
 ---
@@ -217,4 +227,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.4.4**
+Current version: **1.5.0**
