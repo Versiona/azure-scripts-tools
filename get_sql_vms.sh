@@ -214,12 +214,19 @@ interactive_login_and_select() {
     ok "Selected ${#SUBSCRIPTIONS[@]} subscription(s)"
 }
 
-# ─── Fetch all SQL VMs in the currently active subscription ───────────────────
+# ─── Fetch all SQL VMs in a subscription ─────────────────────────────────────
 fetch_sql_vms() {
-    local args=()
+    local sub_id=$1
+    local args=(--subscription "$sub_id")
     [[ -n "$RESOURCE_GROUP" ]] && args+=(--resource-group "$RESOURCE_GROUP")
-    dbg "  az sql vm list ${args[*]:-}"
-    az sql vm list "${args[@]}" -o json 2>/dev/null || echo "[]"
+    dbg "  az sql vm list --subscription $sub_id ${RESOURCE_GROUP:+--resource-group $RESOURCE_GROUP}"
+    local result
+    result=$(az sql vm list "${args[@]}" -o json 2>&1) || {
+        warn "  az sql vm list failed: $result"
+        echo "[]"
+        return 0
+    }
+    echo "$result"
 }
 
 # ─── Get compute-level details for one VM ─────────────────────────────────────
@@ -365,7 +372,7 @@ process_subscription_vms() {
     log "  Fetching SQL VMs in: ${BOLD}${sub_name}${NC} [${sub_id}]" >&2
 
     local raw_vms
-    raw_vms=$(fetch_sql_vms)
+    raw_vms=$(fetch_sql_vms "$sub_id")
     local vm_count
     vm_count=$(jq 'length' <<<"$raw_vms")
 
