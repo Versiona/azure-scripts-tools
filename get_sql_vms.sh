@@ -245,7 +245,7 @@ ws_resource_id_to_customer_id() {
     az monitor log-analytics workspace show \
         --workspace-name "$ws_name" \
         --resource-group "$ws_rg" \
-        --query 'customerId' -o tsv 2>/dev/null || true
+        --query 'customerId' -o tsv 2>/dev/null | tr -d '\r' || true
 }
 
 # ─── Normalise az monitor log-analytics query output ──────────────────────────
@@ -357,24 +357,27 @@ process_subscription_vms() {
     ok "  Found ${vm_count} SQL VM(s) – fetching compute details..."
 
     while IFS= read -r vm; do
-        local name rg loc sql_sku sql_offer
-        name=$(jq -r '.name'                                     <<<"$vm")
-        rg=$(jq -r   '.resourceGroup'                            <<<"$vm")
-        loc=$(jq -r  '.location'                                 <<<"$vm")
-        sql_sku=$(jq -r     '.properties.sqlImageSku      // "unknown"' <<<"$vm")
-        sql_offer=$(jq -r   '.properties.sqlImageOffer   // ""'        <<<"$vm")
-        sql_license=$(jq -r '.properties.sqlServerLicenseType // "unknown"' <<<"$vm")
+        local name rg loc sql_sku sql_offer sql_license
+        name=$(jq -r '.name'         <<<"$vm" || true)
+        rg=$(jq -r   '.resourceGroup' <<<"$vm" || true)
+        loc=$(jq -r  '.location'      <<<"$vm" || true)
+        # Support both top-level fields (newer CLI) and nested .properties (older CLI)
+        sql_sku=$(jq -r     '(.properties.sqlImageSku       // .sqlImageSku)       // "unknown"' <<<"$vm" || true)
+        sql_offer=$(jq -r   '(.properties.sqlImageOffer     // .sqlImageOffer)     // ""'        <<<"$vm" || true)
+        sql_license=$(jq -r '(.properties.sqlServerLicenseType // .sqlServerLicenseType) // "unknown"' <<<"$vm" || true)
+
+        [[ -z "$name" || "$name" == "null" ]] && continue
 
         local compute vm_size img_sku
         compute=$(fetch_vm_compute "$name" "$rg")
-        vm_size=$(jq -r '.vmSize   // "unknown"' <<<"$compute")
-        img_sku=$(jq -r '.imageSku // "unknown"' <<<"$compute")
+        vm_size=$(jq -r '.vmSize   // "unknown"' <<<"$compute" || true)
+        img_sku=$(jq -r '.imageSku // "unknown"' <<<"$compute" || true)
 
         local sql_version
         sql_version=$(parse_sql_version_from_offer "$sql_offer")
 
         local entry
-        entry=$(jq -n \
+        entry=$(jq -cn \
             --arg subId        "$sub_id"       \
             --arg subName      "$sub_name"     \
             --arg vmName       "$name"         \
@@ -392,8 +395,7 @@ process_subscription_vms() {
                sqlSku:$sqlSku, sqlOffer:$sqlOffer, sqlVersion:$sqlVersion,
                sqlLicense:$sqlLicense }')
 
-        # Append to the caller's accumulator via nameref-compatible pattern
-        printf '%s' "$entry"$'\n'
+        printf '%s\n' "$entry"
     done < <(jq -c '.[]' <<<"$raw_vms")
 }
 
@@ -476,7 +478,7 @@ main() {
     # Default to the currently active account if nothing specified
     if [[ ${#SUBSCRIPTIONS[@]} -eq 0 ]]; then
         local current_sub
-        current_sub=$(az account show --query 'id' -o tsv)
+        current_sub=$(az account show --query 'id' -o tsv | tr -d '\r')
         SUBSCRIPTIONS+=("$current_sub")
     fi
 
@@ -493,7 +495,7 @@ main() {
             continue
         }
         local sub_name
-        sub_name=$(az account show --query 'name' -o tsv 2>/dev/null || echo "$sub")
+        sub_name=$(az account show --query 'name' -o tsv 2>/dev/null | tr -d '\r' || echo "$sub")
 
         # Collect VM entries as newline-separated JSON objects, then append
         local vm_entries
@@ -524,7 +526,7 @@ main() {
     for sub in "${SUBSCRIPTIONS[@]}"; do
         az account set --subscription "$sub" 2>/dev/null || continue
         local sub_name
-        sub_name=$(az account show --query 'name' -o tsv 2>/dev/null || echo "$sub")
+        sub_name=$(az account show --query 'name' -o tsv 2>/dev/null | tr -d '\r' || echo "$sub")
 
         while IFS= read -r batch; do
             [[ -z "$batch" ]] && continue
