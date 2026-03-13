@@ -217,4 +217,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.4.1**
+Current version: **1.4.2**

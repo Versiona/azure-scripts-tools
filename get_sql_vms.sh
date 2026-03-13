@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.4.1"
+readonly VERSION="1.4.2"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -365,7 +365,7 @@ let inv = ConfigurationData
 | project Computer,
           InstanceName  = SoftwareName,
           Source        = "SoftwareInventory",
-          DisplayName   = strcat(SoftwareName, " v", SoftwareVersion),
+          DisplayName   = strcat(SoftwareName, " v", column_ifexists("SoftwareVersion", "")),
           State         = "Installed",
           StartupType   = "N/A",
           ServiceAccount= "N/A",
