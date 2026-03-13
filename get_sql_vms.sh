@@ -14,10 +14,11 @@ set -euo pipefail
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly VERSION="1.3.0"
 
-# ─── Terminal colors (only when stderr is a TTY) ──────────────────────────────
-if [[ -t 2 ]]; then
-    BOLD='\033[1m' RED='\033[0;31m' GREEN='\033[0;32m'
-    YELLOW='\033[1;33m' BLUE='\033[0;34m' CYAN='\033[0;36m' NC='\033[0m'
+# ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
+if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
+    BOLD="$(tput bold)"   RED="$(tput setaf 1)"  GREEN="$(tput setaf 2)"
+    YELLOW="$(tput setaf 3)" BLUE="$(tput setaf 4)" CYAN="$(tput setaf 6)"
+    NC="$(tput sgr0)"
 else
     BOLD='' RED='' GREEN='' YELLOW='' BLUE='' CYAN='' NC=''
 fi
@@ -356,7 +357,11 @@ process_subscription_vms() {
     fi
     ok "  Found ${vm_count} SQL VM(s) – fetching compute details..."
 
-    while IFS= read -r vm; do
+    local vm_idx=0
+    # Use fd 3 for the VM stream so that az commands inside the loop
+    # cannot accidentally consume data from the loop's read source.
+    while IFS= read -r vm <&3; do
+        (( vm_idx++ )) || true
         local name rg loc sql_sku sql_offer sql_license
         name=$(jq -r '.name'         <<<"$vm" || true)
         rg=$(jq -r   '.resourceGroup' <<<"$vm" || true)
@@ -367,6 +372,8 @@ process_subscription_vms() {
         sql_license=$(jq -r '(.properties.sqlServerLicenseType // .sqlServerLicenseType) // "unknown"' <<<"$vm" || true)
 
         [[ -z "$name" || "$name" == "null" ]] && continue
+
+        dbg "    [$$] VM ${vm_idx}/${vm_count}: ${name} (${rg})"
 
         local compute vm_size img_sku
         compute=$(fetch_vm_compute "$name" "$rg")
@@ -396,7 +403,7 @@ process_subscription_vms() {
                sqlLicense:$sqlLicense }')
 
         printf '%s\n' "$entry"
-    done < <(jq -c '.[]' <<<"$raw_vms")
+    done 3< <(jq -c '.[]' <<<"$raw_vms")
 }
 
 # ─── Process one subscription: collect MSSQL inventory ───────────────────────
@@ -469,6 +476,8 @@ main() {
     done
 
     check_prereqs
+
+    log "Script PID: $$"
 
     $INTERACTIVE && interactive_login_and_select
 
