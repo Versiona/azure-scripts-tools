@@ -18,13 +18,17 @@ running MSSQL instances.
 2. Per VM, calls `az vm show` to enrich with `vmSize` and OS image SKU; SQL
    version is parsed from the `sqlImageOffer` field
    (e.g. `"SQL2019-WS2019"` → `"2019"`).
-3. Optionally queries **Change Tracking & Inventory** for running MSSQL
-   instances using two complementary sources:
-   - **Windows Services** — matches service names starting with `MSSQL`
-     (e.g. `MSSQLSERVER`, `MSSQL$NAMED`) **or** display names containing
-     `"SQL Server"` (e.g. `"SQL Server (MSSQLSERVER)"`). Both naming
-     conventions are covered so no instance is missed regardless of how the
-     Change Tracking agent reports the service.
+3. Optionally queries **Change Tracking & Inventory** using two complementary
+   sources:
+   - **Windows Services** — matches the following service name patterns:
+     - `MSSQL*` — SQL Server Database Engine (default `MSSQLSERVER` and named
+       `MSSQL$INSTANCE`)
+     - `MsDtsServer*` — SQL Server Integration Services / SSIS (e.g.
+       `MsDtsServer150` for 2019, `MsDtsServer140` for 2017)
+     - `SQLServerReportingServices` — SSRS 2017 and later
+     - `ReportServer` / `ReportServer$*` — SSRS 2016 and earlier
+     - Display names containing `"SQL Server"` as a fallback when the service
+       short name column is empty (CT agent schema variant).
    - **Software Inventory** — matches entries whose `SoftwareName` contains
      `"SQL Server"` (`Microsoft SQL Server …`).
    A `Source` column (`WindowsService` / `SoftwareInventory`) indicates which
@@ -218,9 +222,10 @@ Full JSON array, one object per section. Pipe through `jq` for filtering.
   hostname, which is usually the same as the Azure VM resource name. If a VM
   uses a different hostname (e.g. domain-joined), use `-v` to inspect the
   computer filter being applied.
-- The Windows Services query matches **both** `MSSQL*` service names and
-  display names containing `"SQL Server"`, so instances are found regardless of
-  which field the Change Tracking agent populates on a given OS version.
+- The Windows Services query matches `MSSQL*` (Database Engine), `MsDtsServer*`
+  (SSIS), `SQLServerReportingServices` / `ReportServer*` (SSRS), and display
+  names containing `"SQL Server"` as a fallback — covering all SQL Server
+  service components regardless of CT agent schema version.
 - Failures on individual `az` calls (inaccessible subscription, missing
   workspace, etc.) are surfaced as warnings and the scan continues; a single
   error does not abort the whole run.
@@ -265,4 +270,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.5.2**
+Current version: **1.6.0**

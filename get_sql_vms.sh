@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.5.2"
+readonly VERSION="1.6.0"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -343,8 +343,13 @@ query_mssql_services() {
     [[ -n "$computers" ]] && computer_where="
 | where Computer in~ ($computers)"
 
-    # Windows Services: MSSQLSERVER / MSSQL$<name> (service name),
-    #   or display name containing "SQL Server" (e.g. "SQL Server (MSSQLSERVER)")
+    # Windows Services matched by service short name (_svcName):
+    #   MSSQL*              — SQL Server Database Engine (default + named instances)
+    #   MsDtsServer*        — SQL Server Integration Services (SSIS)
+    #   SQLServerReportingServices — SSRS 2017+
+    #   ReportServer / ReportServer$* — SSRS 2016 and earlier
+    # Display-name fallback catches any of the above when the service-name
+    # column is empty (CT agent schema variant).
     # The service short name may live in SoftwareName, Name, or ServiceName
     # depending on the CT agent version — coalesce across all candidates first.
     # Software Inventory: "Microsoft SQL Server <year>" or "SQL Server"
@@ -357,6 +362,9 @@ query_mssql_services() {
     column_ifexists("ServiceName", ""),
     "")
 | where _svcName startswith "MSSQL"
+    or _svcName startswith "MsDtsServer"
+    or _svcName =~ "SQLServerReportingServices"
+    or _svcName startswith "ReportServer"
     or column_ifexists("CurrentServiceName", "") contains "SQL Server"
     or column_ifexists("ServiceDisplayName", "") contains "SQL Server"
 | extend InstanceName = coalesce(

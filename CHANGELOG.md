@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] – 2026-03-12
+
+### Added
+- Windows Services KQL now also detects **SSIS** and **SSRS** instances:
+  - `MsDtsServer*` — SQL Server Integration Services (all versions; e.g.
+    `MsDtsServer150` for 2019, `MsDtsServer140` for 2017, etc.)
+  - `SQLServerReportingServices` — SSRS 2017 and later
+  - `ReportServer` / `ReportServer$*` — SSRS 2016 and earlier (default and
+    named instances)
+- These appear in inventory output alongside Database Engine entries with
+  `Source = "WindowsService"` and their service short name as `InstanceName`.
+- The display-name fallback (`contains "SQL Server"`) already caught SSIS and
+  SSRS display names; the new service-name filters provide a more reliable
+  primary match.
+
+### Changed
+- Version bumped to `1.6.0`.
+
+---
+
 ## [1.5.2] – 2026-03-12
 
 ### Fixed
@@ -232,6 +252,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.6.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.4...v1.5.0

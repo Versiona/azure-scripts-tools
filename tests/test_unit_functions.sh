@@ -232,4 +232,14 @@ assert_contains "kql coalesces ServiceName for _svcName" \
 assert_contains "kql filters _svcName startswith MSSQL" \
     "_svcName" "$(grep '_svcName startswith' "$SCRIPT" | head -1)"
 
+# ─── KQL svc block covers SSIS and SSRS service names ────────────────────────
+suite "KQL query — SSIS and SSRS service name filters"
+
+assert_contains "kql filters MsDtsServer (SSIS)" \
+    "MsDtsServer" "$(grep 'MsDtsServer' "$SCRIPT" | head -1)"
+assert_contains "kql filters SQLServerReportingServices (SSRS 2017+)" \
+    "SQLServerReportingServices" "$(grep 'SQLServerReportingServices' "$SCRIPT" | head -1)"
+assert_contains "kql filters ReportServer (SSRS 2016 and earlier)" \
+    "ReportServer" "$(grep 'startswith.*ReportServer' "$SCRIPT" | head -1)"
+
 summary
