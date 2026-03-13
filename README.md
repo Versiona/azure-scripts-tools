@@ -89,7 +89,9 @@ get_sql_vms.sh [OPTIONS]
 | `-w, --workspace <id>` | Log Analytics workspace customer ID (GUID). If omitted, workspaces are auto-discovered per subscription. |
 | `-o, --output <format>` | `table` (default) \| `json` \| `csv` |
 | `--vms-file <path>` | Write SQL VM results to this file instead of stdout. |
-| `--inv-file <path>` | Write Change Tracking inventory results to this file instead of stdout. |
+| `--inv-file <path>` | Write combined Change Tracking inventory to this file instead of stdout. |
+| `--svc-file <path>` | Write **Windows Services** rows to this file (activates split mode). |
+| `--sw-file <path>` | Write **Software Inventory** rows to this file (activates split mode). |
 | `--skip-inventory` | Skip Change Tracking inventory queries (faster). |
 | `-v, --verbose` | Print debug output to stderr. |
 | `-h, --help` | Show help text. |
@@ -123,15 +125,21 @@ get_sql_vms.sh [OPTIONS]
 # Interactive login + subscription picker (requires fzf for best experience)
 ./get_sql_vms.sh -i
 
-# Interactive + separate CSV files for VMs and inventory
+# Interactive + separate CSV files for VMs and combined inventory
 ./get_sql_vms.sh -i -o csv \
   --vms-file sql_vms.csv \
   --inv-file sql_inventory.csv
 
+# Split inventory: Windows Services and Software Inventory in separate files
+./get_sql_vms.sh -f subscriptions.txt -o csv \
+  --vms-file sql_vms.csv \
+  --svc-file windows_services.csv \
+  --sw-file  software_inventory.csv
+
 # Filter to a specific resource group
 ./get_sql_vms.sh -s "aaaa-..." -g "my-resource-group"
 
-# Write each section to a separate CSV file
+# Write each section to a separate CSV file (combined inventory)
 ./get_sql_vms.sh -f subscriptions.txt -o csv \
   --vms-file sql_vms.csv \
   --inv-file sql_inventory.csv
@@ -270,4 +278,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.6.0**
+Current version: **1.7.0**

@@ -242,4 +242,27 @@ assert_contains "kql filters SQLServerReportingServices (SSRS 2017+)" \
 assert_contains "kql filters ReportServer (SSRS 2016 and earlier)" \
     "ReportServer" "$(grep 'startswith.*ReportServer' "$SCRIPT" | head -1)"
 
+# ─── Split-mode jq filter ─────────────────────────────────────────────────────
+suite "Split mode — jq Source filter"
+
+COMBINED='[
+  {"Computer":"vm1","Source":"WindowsService","InstanceName":"MSSQLSERVER"},
+  {"Computer":"vm1","Source":"SoftwareInventory","InstanceName":"Microsoft SQL Server 2019"},
+  {"Computer":"vm2","Source":"WindowsService","InstanceName":"MsDtsServer150"}
+]'
+
+SVC_SPLIT=$(jq '[.[] | select(.Source == "WindowsService")]'   <<<"$COMBINED")
+SW_SPLIT=$(jq  '[.[] | select(.Source == "SoftwareInventory")]' <<<"$COMBINED")
+
+assert_eq "svc split has 2 rows"      "2" "$(jq 'length' <<<"$SVC_SPLIT")"
+assert_eq "sw split has 1 row"        "1" "$(jq 'length' <<<"$SW_SPLIT")"
+assert_eq "svc split: no SoftwareInventory rows" "0" \
+    "$(jq '[.[] | select(.Source == "SoftwareInventory")] | length' <<<"$SVC_SPLIT")"
+assert_eq "sw split: no WindowsService rows"     "0" \
+    "$(jq '[.[] | select(.Source == "WindowsService")] | length' <<<"$SW_SPLIT")"
+assert_eq "svc split first instance"  "MSSQLSERVER" \
+    "$(jq -r '.[0].InstanceName' <<<"$SVC_SPLIT")"
+assert_eq "sw split first instance"   "Microsoft SQL Server 2019" \
+    "$(jq -r '.[0].InstanceName' <<<"$SW_SPLIT")"
+
 summary

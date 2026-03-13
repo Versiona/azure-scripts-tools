@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] – 2026-03-13
+
+### Added
+- `--svc-file <path>`: write **Windows Services** inventory rows to a dedicated
+  file (MSSQL*, SSIS, SSRS).
+- `--sw-file <path>`: write **Software Inventory** rows to a dedicated file
+  (installed SQL Server applications).
+- **Split mode**: activated when `--svc-file` or `--sw-file` (or both) are
+  provided. Each source is written to its own destination. If only one split
+  flag is given, the other source falls back to stdout. `--inv-file` can be
+  used alongside split flags to additionally produce a combined file.
+- Sub-section banners in split mode (`── Windows Services ──` /
+  `── Software Inventory ──`) written to stderr.
+
+### Changed
+- Inventory banner updated to "Change Tracking – SQL Server Inventory"
+  (was "Running MSSQL Instances") to reflect the broader scope (SSIS, SSRS).
+- Version bumped to `1.7.0`.
+
+---
+
 ## [1.6.0] – 2026-03-12
 
 ### Added
@@ -252,6 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.7.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.0...v1.5.1

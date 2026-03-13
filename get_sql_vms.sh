@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.6.0"
+readonly VERSION="1.7.0"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -30,7 +30,9 @@ RESOURCE_GROUP=""
 WORKSPACE_ID=""
 OUTPUT_FORMAT="table"
 VMS_OUTPUT_FILE=""         # --vms-file: write SQL VM results here; empty = stdout
-INV_OUTPUT_FILE=""         # --inv-file: write inventory results here; empty = stdout
+INV_OUTPUT_FILE=""         # --inv-file: write combined inventory here; empty = stdout
+SVC_OUTPUT_FILE=""         # --svc-file: write Windows Services rows here (split mode)
+SW_OUTPUT_FILE=""          # --sw-file:  write Software Inventory rows here (split mode)
 SKIP_INVENTORY=false
 VERBOSE=false
 INTERACTIVE=false
@@ -85,8 +87,12 @@ ${BOLD}OPTIONS${NC}
   -o, --output  <format>         table | json | csv   (default: table)
       --vms-file  <path>         Write SQL VM results to this file instead of
                                  stdout. Creates or overwrites the file.
-      --inv-file  <path>         Write Change Tracking inventory results to this
+      --inv-file  <path>         Write combined Change Tracking inventory to this
                                  file instead of stdout.
+      --svc-file  <path>         Write Windows Services rows to this file
+                                 (activates split mode; see below).
+      --sw-file   <path>         Write Software Inventory rows to this file
+                                 (activates split mode; see below).
       --skip-inventory           Skip Change Tracking inventory queries
   -v, --verbose                  Debug output
   -h, --help                     Show this help
@@ -100,11 +106,18 @@ ${BOLD}EXAMPLES${NC}
   ${SCRIPT_NAME} -i
   ${SCRIPT_NAME} -i -o csv --skip-inventory
   ${SCRIPT_NAME} -f subs.txt -o csv --vms-file vms.csv --inv-file inventory.csv
+  ${SCRIPT_NAME} -f subs.txt -o csv --svc-file services.csv --sw-file software.csv
 
 ${BOLD}SUBSCRIPTIONS FILE FORMAT${NC}
   # This is a comment
   00000000-0000-0000-0000-000000000001
   00000000-0000-0000-0000-000000000002
+
+${BOLD}SPLIT MODE${NC}
+  When --svc-file or --sw-file is specified, inventory output is split by
+  source: Windows Services rows go to --svc-file and Software Inventory rows
+  go to --sw-file. If only one split flag is given, the other source is written
+  to stdout. --inv-file (combined) can be used alongside split flags.
 
 ${BOLD}NOTES${NC}
   The workspace ID is the GUID shown in the Log Analytics workspace overview
@@ -608,6 +621,8 @@ main() {
             -o|--output)             OUTPUT_FORMAT="$2";      shift 2 ;;
             --vms-file)              VMS_OUTPUT_FILE="$2";    shift 2 ;;
             --inv-file)              INV_OUTPUT_FILE="$2";    shift 2 ;;
+            --svc-file)              SVC_OUTPUT_FILE="$2";    shift 2 ;;
+            --sw-file)               SW_OUTPUT_FILE="$2";     shift 2 ;;
             -i|--interactive)        INTERACTIVE=true;        shift   ;;
             --skip-inventory)        SKIP_INVENTORY=true;     shift   ;;
             -v|--verbose)            VERBOSE=true;            shift   ;;
@@ -703,21 +718,54 @@ main() {
     $SKIP_INVENTORY && return 0
 
     # ── Print inventory results ───────────────────────────────────────────────
-    printf "\n${BOLD}═══ Change Tracking – Running MSSQL Instances ══════════════════${NC}\n\n" >&2
+    printf "\n${BOLD}═══ Change Tracking – SQL Server Inventory ═════════════════════${NC}\n\n" >&2
     if [[ $(jq 'length' <<<"$all_instances") -eq 0 ]]; then
-        warn "No MSSQL instances found in Change Tracking inventory."
+        warn "No instances found in Change Tracking inventory."
         warn "Ensure VMs are onboarded to Change Tracking and collection has run."
         return 0
     fi
 
-    local inv_dest="${INV_OUTPUT_FILE:-/dev/stdout}"
-    [[ -n "$INV_OUTPUT_FILE" ]] && log "Writing inventory results → ${INV_OUTPUT_FILE}"
-    case "$OUTPUT_FORMAT" in
-        json) jq . <<<"$all_instances"        > "$inv_dest" ;;
-        csv)  print_inv_csv "$all_instances"  > "$inv_dest" ;;
-        *)    print_inv_table "$all_instances" > "$inv_dest" ;;
-    esac
-    [[ -n "$INV_OUTPUT_FILE" ]] && ok "Inventory results written to: ${INV_OUTPUT_FILE}"
+    # Helper: write a data block to its destination
+    _write_inv() {
+        local data=$1 dest=$2
+        case "$OUTPUT_FORMAT" in
+            json) jq . <<<"$data"         > "$dest" ;;
+            csv)  print_inv_csv "$data"   > "$dest" ;;
+            *)    print_inv_table "$data" > "$dest" ;;
+        esac
+    }
+
+    if [[ -n "$SVC_OUTPUT_FILE" || -n "$SW_OUTPUT_FILE" ]]; then
+        # ── Split mode: Windows Services and Software Inventory separately ──────
+        local svc_data sw_data
+        svc_data=$(jq '[.[] | select(.Source == "WindowsService")]'   <<<"$all_instances")
+        sw_data=$(jq  '[.[] | select(.Source == "SoftwareInventory")]' <<<"$all_instances")
+
+        printf "${BOLD}── Windows Services ────────────────────────────────────────────${NC}\n\n" >&2
+        local svc_dest="${SVC_OUTPUT_FILE:-/dev/stdout}"
+        [[ -n "$SVC_OUTPUT_FILE" ]] && log "Writing Windows Services → ${SVC_OUTPUT_FILE}"
+        _write_inv "$svc_data" "$svc_dest"
+        [[ -n "$SVC_OUTPUT_FILE" ]] && ok "Windows Services written to: ${SVC_OUTPUT_FILE}"
+
+        printf "\n${BOLD}── Software Inventory ──────────────────────────────────────────${NC}\n\n" >&2
+        local sw_dest="${SW_OUTPUT_FILE:-/dev/stdout}"
+        [[ -n "$SW_OUTPUT_FILE" ]] && log "Writing Software Inventory → ${SW_OUTPUT_FILE}"
+        _write_inv "$sw_data" "$sw_dest"
+        [[ -n "$SW_OUTPUT_FILE" ]] && ok "Software Inventory written to: ${SW_OUTPUT_FILE}"
+
+        # Also write combined if --inv-file explicitly requested alongside split
+        if [[ -n "$INV_OUTPUT_FILE" ]]; then
+            log "Writing combined inventory → ${INV_OUTPUT_FILE}"
+            _write_inv "$all_instances" "$INV_OUTPUT_FILE"
+            ok "Combined inventory written to: ${INV_OUTPUT_FILE}"
+        fi
+    else
+        # ── Standard mode: combined output ────────────────────────────────────
+        local inv_dest="${INV_OUTPUT_FILE:-/dev/stdout}"
+        [[ -n "$INV_OUTPUT_FILE" ]] && log "Writing inventory results → ${INV_OUTPUT_FILE}"
+        _write_inv "$all_instances" "$inv_dest"
+        [[ -n "$INV_OUTPUT_FILE" ]] && ok "Inventory results written to: ${INV_OUTPUT_FILE}"
+    fi
 }
 
 main "$@"
