@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] – 2026-03-12
+
+### Fixed
+- KQL `SEM0255` error: `format_datetime()` does not accept literal text in the
+  format string. The `" UTC"` suffix is now appended via `strcat()`:
+  `strcat(format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm"), " UTC")`.
+
+### Changed
+- Version bumped to `1.4.1`.
+
+---
+
 ## [1.4.0] – 2026-03-12
 
 ### Added
@@ -124,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.4.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.1.0...v1.2.0

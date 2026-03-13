@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.4.0"
+readonly VERSION="1.4.1"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -357,7 +357,7 @@ query_mssql_services() {
               column_ifexists("SvcAccount", ""),
               column_ifexists("ServiceAccount", ""),
               "unknown"),
-          LastSeen      = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC");
+          LastSeen      = strcat(format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm"), " UTC");
 let inv = ConfigurationData
 | where ConfigDataType == "Software"
 | where SoftwareName contains "SQL Server"
@@ -369,7 +369,7 @@ let inv = ConfigurationData
           State         = "Installed",
           StartupType   = "N/A",
           ServiceAccount= "N/A",
-          LastSeen      = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC");
+          LastSeen      = strcat(format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm"), " UTC");
 union svc, inv
 | sort by Computer asc, Source asc, InstanceName asc'
 
