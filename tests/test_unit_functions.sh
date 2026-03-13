@@ -123,6 +123,61 @@ EXIT=$?
 set -e
 assert_eq "missing file → non-zero exit" "1" "$EXIT"
 
+# ─── print_vm_csv — output structure ─────────────────────────────────────────
+suite "print_vm_csv — header and data row"
+
+MOCK_VMS='[{"subscriptionName":"Sub1","subscriptionId":"aaaa-0001","vmName":"vm-sql-01",
+  "resourceGroup":"rg-sql","location":"eastus","vmSize":"Standard_D4s_v3",
+  "imageSku":"2019-datacenter-core","sqlSku":"Developer",
+  "sqlOffer":"SQL2019-WS2019","sqlVersion":"2019","sqlLicense":"AHUB"}]'
+VMS_CSV=$(print_vm_csv "$MOCK_VMS")
+VMS_HEADER=$(echo "$VMS_CSV" | head -1)
+VMS_ROW=$(echo "$VMS_CSV"    | tail -1)
+
+assert_contains "vm csv header: Subscription Name" "Subscription Name" "$VMS_HEADER"
+assert_contains "vm csv header: VM Name"           "VM Name"           "$VMS_HEADER"
+assert_contains "vm csv header: SQL Version"       "SQL Version"       "$VMS_HEADER"
+assert_contains "vm csv header: License Type"      "License Type"      "$VMS_HEADER"
+assert_contains "vm csv row: vm name"              "vm-sql-01"         "$VMS_ROW"
+assert_contains "vm csv row: license value"        "AHUB"              "$VMS_ROW"
+assert_contains "vm csv row: sql version"          "2019"              "$VMS_ROW"
+
+suite "print_vm_csv — writes to file"
+
+TMP_VMS=$(mktemp)
+print_vm_csv "$MOCK_VMS" > "$TMP_VMS"
+assert_contains "vm csv file: header in file"   "Subscription Name" "$(head -1 "$TMP_VMS")"
+assert_contains "vm csv file: data row in file" "vm-sql-01"         "$(tail -1 "$TMP_VMS")"
+rm -f "$TMP_VMS"
+
+# ─── print_inv_csv — output structure ────────────────────────────────────────
+suite "print_inv_csv — header and data row"
+
+MOCK_INV='[{"subscriptionName":"Sub1","subscriptionId":"aaaa-0001","Computer":"vm-sql-01",
+  "Source":"WindowsService","InstanceName":"MSSQLSERVER",
+  "DisplayName":"SQL Server (MSSQLSERVER)","State":"Running",
+  "StartupType":"Automatic","ServiceAccount":"NT Service\\MSSQLSERVER",
+  "LastSeen":"2026-03-12 09:00 UTC"}]'
+INV_CSV=$(print_inv_csv "$MOCK_INV")
+INV_HEADER=$(echo "$INV_CSV" | head -1)
+INV_ROW=$(echo "$INV_CSV"    | tail -1)
+
+assert_contains "inv csv header: Source"        "Source"        "$INV_HEADER"
+assert_contains "inv csv header: Instance Name" "Instance Name" "$INV_HEADER"
+assert_contains "inv csv header: Startup Type"  "Startup Type"  "$INV_HEADER"
+assert_contains "inv csv header: Last Seen"     "Last Seen"     "$INV_HEADER"
+assert_contains "inv csv row: computer"         "vm-sql-01"     "$INV_ROW"
+assert_contains "inv csv row: source"           "WindowsService" "$INV_ROW"
+assert_contains "inv csv row: instance name"    "MSSQLSERVER"   "$INV_ROW"
+
+suite "print_inv_csv — writes to file"
+
+TMP_INV=$(mktemp)
+print_inv_csv "$MOCK_INV" > "$TMP_INV"
+assert_contains "inv csv file: header in file"    "Source"      "$(head -1 "$TMP_INV")"
+assert_contains "inv csv file: data row in file"  "vm-sql-01"   "$(tail -1 "$TMP_INV")"
+rm -f "$TMP_INV"
+
 # ─── Source field — inventory data model ─────────────────────────────────────
 suite "Source field in inventory data model"
 

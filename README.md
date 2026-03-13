@@ -104,17 +104,19 @@ get_sql_vms.sh [OPTIONS]
 # Use an explicit Log Analytics workspace
 ./get_sql_vms.sh -f subscriptions.txt -w "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# CSV export, no inventory
-./get_sql_vms.sh -f subscriptions.txt -o csv --skip-inventory > sql_vms.csv
+# CSV export, no inventory — write to file
+./get_sql_vms.sh -f subscriptions.txt -o csv --skip-inventory --vms-file sql_vms.csv
 
-# JSON output, single subscription
+# JSON output, single subscription — pipe to jq
 ./get_sql_vms.sh -s "aaaa-..." -o json | jq '.[] | .vmName'
 
 # Interactive login + subscription picker (requires fzf for best experience)
 ./get_sql_vms.sh -i
 
-# Interactive + CSV export
-./get_sql_vms.sh -i -o csv --skip-inventory > sql_vms.csv
+# Interactive + separate CSV files for VMs and inventory
+./get_sql_vms.sh -i -o csv \
+  --vms-file sql_vms.csv \
+  --inv-file sql_inventory.csv
 
 # Filter to a specific resource group
 ./get_sql_vms.sh -s "aaaa-..." -g "my-resource-group"
@@ -144,14 +146,28 @@ Lines starting with `#` and blank lines are ignored.
 
 ## Output formats
 
+The script produces two independent sections: **SQL Virtual Machines** and
+**Change Tracking Inventory**. Each can be written to stdout or redirected to
+its own file with `--vms-file` / `--inv-file`. Section banners (`═══ …`) always
+go to stderr and never appear in files or piped output.
+
 ### table (default)
 
-Human-readable fixed-width table printed to stdout.
+Human-readable fixed-width table.
 
+**SQL VMs:**
 ```
 SUBSCRIPTION             VM NAME                      RESOURCE GROUP       LOCATION         VM SIZE                    OS IMAGE SKU           SQL SKU      SQL VERSION  LICENSE
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 My Subscription          sql-vm-prod-01               rg-sql               eastus           Standard_D8s_v3            2019-datacenter-core   Developer    2019         AHUB
+```
+
+**Change Tracking Inventory:**
+```
+SUBSCRIPTION             COMPUTER                     SOURCE               INSTANCE (SVC NAME)  DISPLAY NAME                         STATE        LAST SEEN
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+My Subscription          sql-vm-prod-01               WindowsService       MSSQLSERVER          SQL Server (MSSQLSERVER)             Running      2026-03-12 09:00 UTC
+My Subscription          sql-vm-prod-01               SoftwareInventory    Microsoft SQL Server 2019  Microsoft SQL Server 2019 v15.0  Installed    2026-03-12 09:00 UTC
 ```
 
 License values returned by Azure:
@@ -166,14 +182,21 @@ License values returned by Azure:
 
 Suitable for import into Excel / Power BI.
 
+**SQL VMs:**
 ```
 Subscription Name,Subscription ID,VM Name,Resource Group,Location,VM Size,OS Image SKU,SQL SKU,SQL Offer,SQL Version,License Type
 My Subscription,aaaa-...,sql-vm-prod-01,rg-sql,eastus,Standard_D8s_v3,2019-datacenter-core,Developer,SQL2019-WS2019,2019,AHUB
 ```
 
+**Change Tracking Inventory:**
+```
+Subscription Name,Subscription ID,Computer,Source,Instance Name,Display Name,State,Startup Type,Service Account,Last Seen
+My Subscription,aaaa-...,sql-vm-prod-01,WindowsService,MSSQLSERVER,SQL Server (MSSQLSERVER),Running,Automatic,NT Service\MSSQLSERVER,2026-03-12 09:00 UTC
+```
+
 ### json
 
-Full JSON array, one object per VM. Pipe through `jq` for filtering.
+Full JSON array, one object per section. Pipe through `jq` for filtering.
 
 ---
 
@@ -183,6 +206,12 @@ Full JSON array, one object per VM. Pipe through `jq` for filtering.
   the Log Analytics workspace overview page — not the full resource ID.
 - Change Tracking & Inventory must be **enabled on the VMs** and data must have
   been collected for inventory queries to return results.
+- Inventory queries are automatically **scoped to the VM names discovered** in
+  each subscription (or resource group if `-g` is used), so only relevant
+  machines are returned. The `Computer` field in Change Tracking is the VM
+  hostname, which is usually the same as the Azure VM resource name. If a VM
+  uses a different hostname (e.g. domain-joined), use `-v` to inspect the
+  computer filter being applied.
 - Failures on individual `az` calls (inaccessible subscription, missing
   workspace, etc.) are surfaced as warnings and the scan continues; a single
   error does not abort the whole run.
