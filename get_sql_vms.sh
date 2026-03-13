@@ -41,6 +41,24 @@ err()  { printf "${RED}✗${NC}  %s\n"    "$*" >&2; }
 dbg()  { $VERBOSE && printf "${CYAN}·${NC} %s\n" "$*" >&2 || true; }
 die()  { err "$*"; exit 1; }
 
+# ─── Progress bar (stderr, redraws in place) ──────────────────────────────────
+# Usage: progress_bar <current> <total> <label>
+progress_bar() {
+    [[ -t 2 ]] || return 0          # skip if stderr is not a TTY
+    local cur=$1 total=$2 label=$3
+    local bar_width=40
+    local filled=$(( bar_width * cur / total ))
+    local empty=$(( bar_width - filled ))
+    local pct=$(( 100 * cur / total ))
+    local bar filled_str empty_str
+    filled_str=$(printf '%0.s█' $(seq 1 "$filled") 2>/dev/null || printf '%*s' "$filled" '' | tr ' ' '█')
+    empty_str=$(printf '%0.s░' $(seq 1 "$empty")   2>/dev/null || printf '%*s' "$empty"  '' | tr ' ' '░')
+    bar="${GREEN}${filled_str}${NC}${empty_str}"
+    printf "\r  ${bar} ${BOLD}%3d%%${NC} (%d/%d) %s " \
+        "$pct" "$cur" "$total" "$label" >&2
+    [[ "$cur" -ge "$total" ]] && printf "\n" >&2
+}
+
 # ─── Usage ────────────────────────────────────────────────────────────────────
 usage() {
     cat <<EOF
@@ -373,6 +391,7 @@ process_subscription_vms() {
 
         [[ -z "$name" || "$name" == "null" ]] && continue
 
+        progress_bar "$vm_idx" "$vm_count" "$name"
         dbg "    [$$] VM ${vm_idx}/${vm_count}: ${name} (${rg})"
 
         local compute vm_size img_sku
