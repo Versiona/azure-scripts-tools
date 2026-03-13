@@ -207,5 +207,7 @@ suite "KQL query — unions both sources"
 
 assert_contains "kql has WindowsServices" "WindowsServices" "$(grep -o 'WindowsServices' "$SCRIPT" | head -1)"
 assert_contains "kql has SoftwareInventory source label" "SoftwareInventory" "$(grep -o 'SoftwareInventory' "$SCRIPT" | head -1)"
+assert_contains "kql matches display name containing SQL Server" \
+    "SQL Server" "$(grep -o 'CurrentServiceName.*SQL Server\|ServiceDisplayName.*SQL Server' "$SCRIPT" | head -1)"
 
 summary

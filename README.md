@@ -256,4 +256,4 @@ az account show
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-Current version: **1.5.0**
+Current version: **1.5.1**

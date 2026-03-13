@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] – 2026-03-12
+
+### Changed
+- Windows Services KQL filter now also matches on display name containing
+  `"SQL Server"` (columns `CurrentServiceName` / `ServiceDisplayName`), in
+  addition to service names starting with `MSSQL` or `MSSQL$`. This catches
+  services whose internal name doesn't follow the `MSSQL*` convention but
+  whose display name identifies them as a SQL Server instance.
+- Version bumped to `1.5.1`.
+
+---
+
 ## [1.5.0] – 2026-03-12
 
 ### Added
@@ -201,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.5.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.2...v1.4.3
