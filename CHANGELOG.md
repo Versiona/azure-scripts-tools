@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.2] – 2026-03-12
+
+### Fixed
+- Windows Services KQL: the service short name (`MSSQL$INSTANCENAME`,
+  `MSSQLSERVER`) may be stored in `SoftwareName`, `Name`, or `ServiceName`
+  depending on the CT agent version. The `svc` block now uses
+  `extend _svcName = coalesce(column_ifexists("SoftwareName",""),
+  column_ifexists("Name",""), column_ifexists("ServiceName",""), "")` and
+  filters on `_svcName startswith "MSSQL"`, ensuring named instances are found
+  regardless of which column the agent populates.
+- `InstanceName` is now resolved from the same coalesced `_svcName` value,
+  so it correctly reflects the service key (e.g. `MSSQL$MYINST`) rather than
+  potentially falling back to a display name.
+
+### Changed
+- Version bumped to `1.5.2`.
+
+---
+
 ## [1.5.1] – 2026-03-12
 
 ### Changed
@@ -213,6 +232,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.5.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.3...v1.4.4

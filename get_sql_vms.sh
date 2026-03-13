@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.5.1"
+readonly VERSION="1.5.2"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -345,17 +345,24 @@ query_mssql_services() {
 
     # Windows Services: MSSQLSERVER / MSSQL$<name> (service name),
     #   or display name containing "SQL Server" (e.g. "SQL Server (MSSQLSERVER)")
+    # The service short name may live in SoftwareName, Name, or ServiceName
+    # depending on the CT agent version — coalesce across all candidates first.
     # Software Inventory: "Microsoft SQL Server <year>" or "SQL Server"
     local kql
     kql='let svc = ConfigurationData
 | where ConfigDataType == "WindowsServices"'"${computer_where}"'
-| where SoftwareName startswith "MSSQL"
-    or column_ifexists("ServiceName", "") startswith "MSSQL"
+| extend _svcName = coalesce(
+    column_ifexists("SoftwareName", ""),
+    column_ifexists("Name", ""),
+    column_ifexists("ServiceName", ""),
+    "")
+| where _svcName startswith "MSSQL"
     or column_ifexists("CurrentServiceName", "") contains "SQL Server"
     or column_ifexists("ServiceDisplayName", "") contains "SQL Server"
 | extend InstanceName = coalesce(
-    SoftwareName,
-    column_ifexists("ServiceName", ""),
+    _svcName,
+    column_ifexists("CurrentServiceName", ""),
+    column_ifexists("ServiceDisplayName", ""),
     "unknown")
 | summarize arg_max(TimeGenerated, *) by Computer, InstanceName
 | project Computer,

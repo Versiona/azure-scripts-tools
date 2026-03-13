@@ -218,4 +218,18 @@ assert_contains "kql filters ServiceDisplayName contains SQL Server" \
 assert_contains "kql display-name columns wrapped in column_ifexists" \
     "column_ifexists" "$(grep 'CurrentServiceName.*SQL Server' "$SCRIPT" | head -1)"
 
+# ─── KQL svc block coalesces service-name column variants ────────────────────
+suite "KQL query — service name column coalesce"
+
+# _svcName must coalesce SoftwareName, Name, and ServiceName so that the
+# MSSQL$ filter works regardless of which column the CT agent populates.
+assert_contains "kql coalesces SoftwareName for _svcName" \
+    "SoftwareName" "$(grep 'column_ifexists("SoftwareName' "$SCRIPT" | head -1)"
+assert_contains "kql coalesces Name for _svcName" \
+    '"Name"' "$(grep 'column_ifexists("Name"' "$SCRIPT" | head -1)"
+assert_contains "kql coalesces ServiceName for _svcName" \
+    "ServiceName" "$(grep 'column_ifexists("ServiceName' "$SCRIPT" | head -1)"
+assert_contains "kql filters _svcName startswith MSSQL" \
+    "_svcName" "$(grep '_svcName startswith' "$SCRIPT" | head -1)"
+
 summary
