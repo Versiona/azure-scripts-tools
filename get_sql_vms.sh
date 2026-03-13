@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.4.2"
+readonly VERSION="1.4.3"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -324,13 +324,23 @@ normalize_la_output() {
 # ─── Query MSSQL instances from Change Tracking Inventory ────────────────────
 # Sources both WindowsServices (MSSQL* service names) and Software Inventory
 # (Microsoft SQL Server entries) so either CT configuration returns results.
+# $1 = workspace customer ID
+# $2 = optional KQL-safe comma-separated quoted computer names to scope the
+#      query (e.g. '"vm-sql-01","vm-sql-02"').  Empty = no scope filter.
 query_mssql_services() {
     local ws_id=$1
+    local computers=${2:-""}
+
+    # Optional per-computer scope injected into both let-blocks
+    local computer_where=""
+    [[ -n "$computers" ]] && computer_where="
+| where Computer in~ ($computers)"
 
     # Windows Services: MSSQLSERVER (default) or MSSQL$<name> (named instance)
     # Software Inventory: "Microsoft SQL Server <year>" or "SQL Server"
-    local kql='let svc = ConfigurationData
-| where ConfigDataType == "WindowsServices"
+    local kql
+    kql='let svc = ConfigurationData
+| where ConfigDataType == "WindowsServices"'"${computer_where}"'
 | where SoftwareName startswith "MSSQL"
     or column_ifexists("ServiceName", "") startswith "MSSQL"
 | extend InstanceName = coalesce(
@@ -359,7 +369,7 @@ query_mssql_services() {
               "unknown"),
           LastSeen      = strcat(format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm"), " UTC");
 let inv = ConfigurationData
-| where ConfigDataType == "Software"
+| where ConfigDataType == "Software"'"${computer_where}"'
 | where SoftwareName contains "SQL Server"
 | summarize arg_max(TimeGenerated, *) by Computer, SoftwareName
 | project Computer,
@@ -374,6 +384,7 @@ union svc, inv
 | sort by Computer asc, Source asc, InstanceName asc'
 
     dbg "  Workspace: $ws_id"
+    [[ -n "$computers" ]] && dbg "  Scoped to computers: $computers"
     dbg "  KQL query:"
     while IFS= read -r line; do dbg "    $line"; done <<<"$kql"
 
@@ -509,8 +520,9 @@ process_subscription_vms() {
 }
 
 # ─── Process one subscription: collect MSSQL inventory ───────────────────────
+# $3 = optional computer filter (KQL comma-separated quoted names)
 process_subscription_inventory() {
-    local sub_id=$1 sub_name=$2
+    local sub_id=$1 sub_name=$2 computer_filter=${3:-""}
 
     local workspaces=()
 
@@ -543,7 +555,7 @@ process_subscription_inventory() {
     for ws in "${workspaces[@]}"; do
         log "  Querying workspace ${ws} (${sub_name})"
         local inst
-        inst=$(query_mssql_services "$ws")
+        inst=$(query_mssql_services "$ws" "$computer_filter")
         local cnt
         cnt=$(jq 'length' <<<"$inst")
         ok "  $cnt MSSQL instance(s) found"
@@ -595,10 +607,9 @@ main() {
 
     log "Scanning ${#SUBSCRIPTIONS[@]} subscription(s)..."
 
-    # ── Collect SQL VMs across all subscriptions ───────────────────────────────
-    printf "\n${BOLD}═══ SQL Virtual Machines ═══════════════════════════════════════${NC}\n\n"
-
+    # ── Single pass: collect VMs then scoped inventory per subscription ────────
     local all_vms="[]"
+    local all_instances="[]"
     local sub
     for sub in "${SUBSCRIPTIONS[@]}"; do
         az account set --subscription "$sub" 2>/dev/null || {
@@ -608,7 +619,7 @@ main() {
         local sub_name
         sub_name=$(az account show --query 'name' -o tsv 2>/dev/null | tr -d '\r' || echo "$sub")
 
-        # Collect VM entries as newline-separated JSON objects, then append
+        # ── VMs ──────────────────────────────────────────────────────────────
         local vm_entries
         vm_entries=$(process_subscription_vms "$sub" "$sub_name" "")
         if [[ -n "$vm_entries" ]]; then
@@ -616,8 +627,36 @@ main() {
                 "$(echo "$vm_entries" | jq -s '.')" \
                 | jq -s 'add // []')
         fi
+
+        $SKIP_INVENTORY && continue
+
+        # ── Inventory scoped to VMs found in this subscription ────────────────
+        # Build KQL-safe list of quoted VM names to use as Computer filter.
+        # This prevents querying the entire workspace and returning data from
+        # unrelated machines.
+        local computer_filter=""
+        if [[ -n "$vm_entries" ]]; then
+            computer_filter=$(echo "$vm_entries" \
+                | jq -rs '[.[].vmName] | map("\"" + . + "\"") | join(",")' \
+                2>/dev/null || true)
+        fi
+
+        if [[ -z "$computer_filter" ]]; then
+            dbg "  No VMs found in $sub_name — skipping inventory query"
+            continue
+        fi
+
+        dbg "  Computer filter: $computer_filter"
+
+        while IFS= read -r batch; do
+            [[ -z "$batch" ]] && continue
+            all_instances=$(printf '%s\n%s' "$all_instances" "$batch" \
+                | jq -s 'add // []')
+        done < <(process_subscription_inventory "$sub" "$sub_name" "$computer_filter")
     done
 
+    # ── Print VM results ──────────────────────────────────────────────────────
+    printf "\n${BOLD}═══ SQL Virtual Machines ═══════════════════════════════════════${NC}\n\n"
     if [[ $(jq 'length' <<<"$all_vms") -eq 0 ]]; then
         warn "No SQL VMs found across all subscriptions."
     else
@@ -628,24 +667,10 @@ main() {
         esac
     fi
 
-    # ── Change Tracking inventory across all subscriptions ────────────────────
     $SKIP_INVENTORY && return 0
 
+    # ── Print inventory results ───────────────────────────────────────────────
     printf "\n${BOLD}═══ Change Tracking – Running MSSQL Instances ══════════════════${NC}\n\n"
-
-    local all_instances="[]"
-    for sub in "${SUBSCRIPTIONS[@]}"; do
-        az account set --subscription "$sub" 2>/dev/null || continue
-        local sub_name
-        sub_name=$(az account show --query 'name' -o tsv 2>/dev/null | tr -d '\r' || echo "$sub")
-
-        while IFS= read -r batch; do
-            [[ -z "$batch" ]] && continue
-            all_instances=$(printf '%s\n%s' "$all_instances" "$batch" \
-                | jq -s 'add // []')
-        done < <(process_subscription_inventory "$sub" "$sub_name")
-    done
-
     if [[ $(jq 'length' <<<"$all_instances") -eq 0 ]]; then
         warn "No MSSQL instances found in Change Tracking inventory."
         warn "Ensure VMs are onboarded to Change Tracking and collection has run."

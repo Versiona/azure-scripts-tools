@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.3] – 2026-03-12
+
+### Fixed
+- KQL inventory query no longer scans the entire workspace. VM names
+  discovered per subscription are now passed as a
+  `| where Computer in~ (...)` filter in both the WindowsServices and
+  Software Inventory let-blocks, preventing thousands of unrelated results
+  and the jq EOF parse error caused by oversized responses.
+- The two subscription loops (VM collection and inventory) are now merged
+  into one so VM names are available to scope the inventory query in the
+  same pass.
+
+### Changed
+- If no VMs are found in a subscription the inventory query for that
+  subscription is skipped entirely.
+- Version bumped to `1.4.3`.
+
+---
+
 ## [1.4.2] – 2026-03-12
 
 ### Fixed
@@ -147,6 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.4.3]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Versiona/azure-scripts-tools/compare/v1.3.0...v1.4.0
