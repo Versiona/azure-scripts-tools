@@ -357,6 +357,10 @@ let inv = ConfigurationData
 union svc, inv
 | sort by Computer asc, Source asc, InstanceName asc'
 
+    dbg "  Workspace: $ws_id"
+    dbg "  KQL query:"
+    while IFS= read -r line; do dbg "    $line"; done <<<"$kql"
+
     local raw
     raw=$(az monitor log-analytics query \
         --workspace "$ws_id" \
