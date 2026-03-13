@@ -256,22 +256,46 @@ parse_sql_version_from_offer() {
 
 # ─── Find Log Analytics workspaces with the ChangeTracking solution ───────────
 find_ct_workspace_resource_ids() {
-    az resource list \
+    local sub_id=$1
+    local result
+    result=$(az resource list \
+        --subscription "$sub_id" \
         --resource-type "Microsoft.OperationsManagement/solutions" \
         --query "[?contains(name,'ChangeTracking')].properties.workspaceResourceId" \
-        -o json 2>/dev/null || echo "[]"
+        -o json 2>&1) || {
+        warn "  az resource list failed: $result"
+        echo "[]"
+        return 0
+    }
+    # If the result is an empty array or null, also try the legacy solution name
+    if [[ "$(echo "$result" | jq 'length')" -eq 0 ]]; then
+        dbg "  No 'ChangeTracking' solution found, trying 'changeTracking' (case variant)"
+        result=$(az resource list \
+            --subscription "$sub_id" \
+            --resource-type "Microsoft.OperationsManagement/solutions" \
+            --query "[?contains(to_string(name),'hangeTracking')].properties.workspaceResourceId" \
+            -o json 2>/dev/null || echo "[]")
+    fi
+    echo "$result"
 }
 
 # ─── Resolve workspace resource ID → customer ID (GUID) ───────────────────────
 ws_resource_id_to_customer_id() {
     local rid=$1
-    local ws_name ws_rg
+    local ws_name ws_rg ws_sub
     ws_name=$(echo "$rid" | awk -F'/' '{print $NF}')
     ws_rg=$(echo "$rid" | awk -F'/' '{for(i=1;i<=NF;i++) if($i=="resourceGroups") print $(i+1)}')
-    az monitor log-analytics workspace show \
+    ws_sub=$(echo "$rid" | awk -F'/' '{for(i=1;i<=NF;i++) if($i=="subscriptions") print $(i+1)}')
+    local result
+    result=$(az monitor log-analytics workspace show \
         --workspace-name "$ws_name" \
         --resource-group "$ws_rg" \
-        --query 'customerId' -o tsv 2>/dev/null | tr -d '\r' || true
+        ${ws_sub:+--subscription "$ws_sub"} \
+        --query 'customerId' -o tsv 2>&1) || {
+        warn "  Could not resolve workspace customer ID for: $ws_name ($result)"
+        return 0
+    }
+    echo "$result" | tr -d '\r'
 }
 
 # ─── Normalise az monitor log-analytics query output ──────────────────────────
@@ -300,16 +324,34 @@ normalize_la_output() {
 # ─── Query MSSQL Windows services from Change Tracking ────────────────────────
 # MSSQLSERVER  = default instance
 # MSSQL$<name> = named instance
+# SoftwareName / ServiceName both handled (field name differs by CT version)
 query_mssql_services() {
     local ws_id=$1
 
-    local kql='ConfigurationData | where ConfigDataType == "WindowsServices" | where SoftwareName startswith "MSSQL" | summarize arg_max(TimeGenerated, *) by Computer, SoftwareName | project Computer, InstanceName=SoftwareName, DisplayName=CurrentServiceName, State=SvcState, StartupType=SvcStartupType, ServiceAccount=SvcAccount, LastSeen=format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC") | sort by Computer asc, InstanceName asc'
+    # coalesce(SoftwareName, ServiceName) covers both CT schema versions
+    local kql='ConfigurationData
+| where ConfigDataType == "WindowsServices"
+| where SoftwareName startswith "MSSQL" or ServiceName startswith "MSSQL"
+| extend InstanceName = coalesce(SoftwareName, ServiceName)
+| summarize arg_max(TimeGenerated, *) by Computer, InstanceName
+| project Computer,
+          InstanceName,
+          DisplayName  = coalesce(CurrentServiceName, ServiceDisplayName, InstanceName),
+          State        = coalesce(SvcState, ServiceState, "unknown"),
+          StartupType  = coalesce(SvcStartupType, ServiceStartupType, "unknown"),
+          ServiceAccount = coalesce(SvcAccount, ServiceAccount, "unknown"),
+          LastSeen     = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC")
+| sort by Computer asc, InstanceName asc'
 
     local raw
     raw=$(az monitor log-analytics query \
         --workspace "$ws_id" \
         --analytics-query "$kql" \
-        -o json 2>/dev/null || echo "[]")
+        -o json 2>&1) || {
+        warn "  Log Analytics query failed for workspace $ws_id: $raw"
+        echo "[]"
+        return 0
+    }
     normalize_la_output "$raw"
 }
 
@@ -444,7 +486,7 @@ process_subscription_inventory() {
     else
         dbg "  Finding Change Tracking workspaces in: $sub_name"
         local ct_rids
-        ct_rids=$(find_ct_workspace_resource_ids)
+        ct_rids=$(find_ct_workspace_resource_ids "$sub_id")
         local ws_count
         ws_count=$(jq 'length' <<<"$ct_rids")
         if [[ "$ws_count" -eq 0 ]]; then
