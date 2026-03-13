@@ -563,7 +563,7 @@ main() {
 
     check_prereqs
 
-    log "Script PID: $$"
+    log "${SCRIPT_NAME} v${VERSION}  (PID $$)"
 
     $INTERACTIVE && interactive_login_and_select
 
