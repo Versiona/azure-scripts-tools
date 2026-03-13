@@ -12,7 +12,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly VERSION="1.4.3"
+readonly VERSION="1.4.4"
 
 # ─── Terminal colors (only when stderr is a TTY and tput is available) ────────
 if [[ -t 2 ]] && command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
@@ -560,8 +560,8 @@ process_subscription_inventory() {
         cnt=$(jq 'length' <<<"$inst")
         ok "  $cnt MSSQL instance(s) found"
 
-        # Inject subscription fields into each result row
-        jq --arg sid "$sub_id" --arg sname "$sub_name" \
+        # Inject subscription fields — compact output (one JSON array per line)
+        jq -c --arg sid "$sub_id" --arg sname "$sub_name" \
             '[.[] | . + { subscriptionId: $sid, subscriptionName: $sname }]' \
             <<<"$inst"
     done
@@ -648,11 +648,14 @@ main() {
 
         dbg "  Computer filter: $computer_filter"
 
-        while IFS= read -r batch; do
-            [[ -z "$batch" ]] && continue
-            all_instances=$(printf '%s\n%s' "$all_instances" "$batch" \
+        # Capture all workspace batches at once (each is a compact JSON array on
+        # its own line) then merge into all_instances in a single jq pass.
+        local inv_output
+        inv_output=$(process_subscription_inventory "$sub" "$sub_name" "$computer_filter")
+        if [[ -n "$inv_output" ]]; then
+            all_instances=$(printf '%s\n%s' "$all_instances" "$inv_output" \
                 | jq -s 'add // []')
-        done < <(process_subscription_inventory "$sub" "$sub_name" "$computer_filter")
+        fi
     done
 
     # ── Print VM results ──────────────────────────────────────────────────────

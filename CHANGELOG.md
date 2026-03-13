@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] – 2026-03-12
+
+### Fixed
+- `jq` "unfinished JSON term at EOF" error on inventory results: `jq` outputs
+  pretty-printed (multi-line) JSON by default, but the collection loop was
+  reading output one line at a time via `while IFS= read -r batch`, so `batch`
+  contained only the first line (e.g. `[`) rather than the full array.
+  Fixed by:
+  1. Adding `-c` to the `jq` call in `process_subscription_inventory` so each
+     workspace result is emitted as compact single-line JSON.
+  2. Replacing the line-by-line `while read` loop in `main()` with a single
+     capture of all inventory output, then one `jq -s 'add // []'` merge.
+
+### Changed
+- Version bumped to `1.4.4`.
+
+---
+
 ## [1.4.3] – 2026-03-12
 
 ### Fixed
@@ -166,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTY-guarded so colors are suppressed when stderr is not a terminal.
 - Self-check for required tools (`az`, `jq`) with actionable error messages.
 
+[1.4.4]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/Versiona/azure-scripts-tools/compare/v1.4.0...v1.4.1
