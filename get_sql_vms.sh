@@ -321,27 +321,41 @@ normalize_la_output() {
     fi
 }
 
-# ─── Query MSSQL Windows services from Change Tracking ────────────────────────
-# MSSQLSERVER  = default instance
-# MSSQL$<name> = named instance
-# SoftwareName / ServiceName both handled (field name differs by CT version)
+# ─── Query MSSQL instances from Change Tracking Inventory ────────────────────
+# Sources both WindowsServices (MSSQL* service names) and Software Inventory
+# (Microsoft SQL Server entries) so either CT configuration returns results.
 query_mssql_services() {
     local ws_id=$1
 
-    # coalesce(SoftwareName, ServiceName) covers both CT schema versions
-    local kql='ConfigurationData
+    # Windows Services: MSSQLSERVER (default) or MSSQL$<name> (named instance)
+    # Software Inventory: "Microsoft SQL Server <year>" or "SQL Server"
+    local kql='let svc = ConfigurationData
 | where ConfigDataType == "WindowsServices"
 | where SoftwareName startswith "MSSQL" or ServiceName startswith "MSSQL"
 | extend InstanceName = coalesce(SoftwareName, ServiceName)
 | summarize arg_max(TimeGenerated, *) by Computer, InstanceName
 | project Computer,
           InstanceName,
-          DisplayName  = coalesce(CurrentServiceName, ServiceDisplayName, InstanceName),
-          State        = coalesce(SvcState, ServiceState, "unknown"),
-          StartupType  = coalesce(SvcStartupType, ServiceStartupType, "unknown"),
-          ServiceAccount = coalesce(SvcAccount, ServiceAccount, "unknown"),
-          LastSeen     = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC")
-| sort by Computer asc, InstanceName asc'
+          Source        = "WindowsService",
+          DisplayName   = coalesce(CurrentServiceName, ServiceDisplayName, InstanceName),
+          State         = coalesce(SvcState, ServiceState, "unknown"),
+          StartupType   = coalesce(SvcStartupType, ServiceStartupType, "unknown"),
+          ServiceAccount= coalesce(SvcAccount, ServiceAccount, "unknown"),
+          LastSeen      = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC");
+let inv = ConfigurationData
+| where ConfigDataType == "Software"
+| where SoftwareName contains "SQL Server"
+| summarize arg_max(TimeGenerated, *) by Computer, SoftwareName
+| project Computer,
+          InstanceName  = SoftwareName,
+          Source        = "SoftwareInventory",
+          DisplayName   = strcat(SoftwareName, " v", SoftwareVersion),
+          State         = "Installed",
+          StartupType   = "N/A",
+          ServiceAccount= "N/A",
+          LastSeen      = format_datetime(TimeGenerated,"yyyy-MM-dd HH:mm UTC");
+union svc, inv
+| sort by Computer asc, Source asc, InstanceName asc'
 
     local raw
     raw=$(az monitor log-analytics query \
@@ -385,25 +399,25 @@ print_vm_csv() {
 # ─── Print inventory results ──────────────────────────────────────────────────
 print_inv_table() {
     local data=$1
-    local h="%-22s %-28s %-20s %-38s %-10s %-22s\n"
+    local h="%-22s %-28s %-18s %-20s %-36s %-12s %-22s\n"
     printf "${BOLD}${h}${NC}" \
-        "SUBSCRIPTION" "COMPUTER" "INSTANCE (SVC NAME)" "DISPLAY NAME" "STATE" "LAST SEEN"
-    printf '%0.s─' {1..147}; echo
+        "SUBSCRIPTION" "COMPUTER" "SOURCE" "INSTANCE (SVC NAME)" "DISPLAY NAME" "STATE" "LAST SEEN"
+    printf '%0.s─' {1..165}; echo
     jq -r '.[] |
-        [ .subscriptionName, .Computer, .InstanceName,
+        [ .subscriptionName, .Computer, (.Source // "unknown"), .InstanceName,
           .DisplayName, .State, .LastSeen ] | @tsv' \
         <<<"$data" \
-    | while IFS=$'\t' read -r sub comp inst disp state last; do
-        printf "$h" "$sub" "$comp" "$inst" "$disp" "$state" "$last"
+    | while IFS=$'\t' read -r sub comp src inst disp state last; do
+        printf "$h" "$sub" "$comp" "$src" "$inst" "$disp" "$state" "$last"
     done
 }
 
 print_inv_csv() {
     local data=$1
-    echo "Subscription Name,Subscription ID,Computer,Instance Name,Display Name,State,Startup Type,Service Account,Last Seen"
+    echo "Subscription Name,Subscription ID,Computer,Source,Instance Name,Display Name,State,Startup Type,Service Account,Last Seen"
     jq -r '.[] |
-        [ .subscriptionName, .subscriptionId, .Computer, .InstanceName,
-          .DisplayName, .State, .StartupType, .ServiceAccount, .LastSeen ] | @csv' \
+        [ .subscriptionName, .subscriptionId, .Computer, (.Source // "unknown"),
+          .InstanceName, .DisplayName, .State, .StartupType, .ServiceAccount, .LastSeen ] | @csv' \
         <<<"$data"
 }
 
